@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Flower Garden • Cozy Pixel</title>
+<meta name="theme-color" content="#b388ff">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  :root{
+    --bg:#0d0a13;
+    --panel:#151022;
+    --ink:#efe9ff;
+    --muted:#bfb5e6;
+    --accent:#b388ff;
+    --accent2:#ffb6e6;
+    --good:#72ffb0;
+    --bad:#ff6b8f;
+  }
+  html,body{height:100%}
+  body{
+    margin:0; background: radial-gradient(1200px 1000px at 50% -10%, #1a122a 0%, var(--bg) 60%);
+    color:var(--ink); font-family: -apple-system,BlinkMacSystemFont,Inter,Segoe UI,Roboto,system-ui,Arial,sans-serif;
+    display:flex; align-items:center; justify-content:center;
+    -webkit-font-smoothing: antialiased;
+    touch-action: manipulation;
+  }
+  .wrap{width:min(760px,96vw); padding:18px 14px 24px}
+  .title{font-weight:800; letter-spacing:.5px; opacity:.9; margin:0 0 8px; font-size:18px}
+  .panel{
+    border:1px solid rgba(179,136,255,.28);
+    border-radius:24px; background: linear-gradient(180deg, rgba(179,136,255,.08), rgba(0,0,0,0));
+    padding:10px; box-shadow: inset 0 0 0 1px rgba(179,136,255,.08);
+  }
+  canvas{
+    width:100%; height:auto; aspect-ratio: 16/10;
+    image-rendering: pixelated; image-rendering: crisp-edges; display:block;
+    background: radial-gradient(800px 400px at 50% 100%, rgba(179,136,255,.08), rgba(0,0,0,0));
+    border-radius:18px;
+  }
+  .hud{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px}
+  .meter{ background: var(--panel); border:1px solid rgba(179,136,255,.22); border-radius:14px; padding:10px }
+  .meter h3{margin:0 0 6px; font-size:12px; opacity:.85; letter-spacing:.3px}
+  .bar{height:10px; background:#0f0c18; border:1px solid rgba(179,136,255,.28); border-radius:10px; overflow:hidden}
+  .fill{height:100%; width:0%}
+  .fill.moist{background: linear-gradient(90deg,#7ad0ff,#a770ff)}
+  .fill.sun{background: linear-gradient(90deg,#ffd37a,#ff8ad6)}
+  .nums{font-size:12px; opacity:.8; margin-top:5px; display:flex; justify-content:space-between}
+  .controls{display:flex; gap:10px; margin-top:12px; flex-wrap:wrap}
+  button{
+    flex:1 1 0; padding:14px 12px; border-radius:14px;
+    border:1px solid rgba(179,136,255,.28); background: linear-gradient(180deg,#241a3a,#171229);
+    color:var(--ink); font-weight:700; letter-spacing:.2px; cursor:pointer;
+    transition: transform .05s ease, background .2s ease; 
+  }
+  button:active{ transform: translateY(1px) scale(.99) }
+  .ghost{ background:#120f1e }
+  .danger{ background:linear-gradient(180deg,#2a1420,#170c11); border-color:rgba(255,107,143,.35) }
+  .note{font-size:12px; opacity:.65; margin-top:10px; text-align:center}
+  .glow{ text-shadow:0 0 10px rgba(165,110,255,.45), 0 0 22px rgba(165,110,255,.35), 0 0 42px rgba(165,110,255,.25) }
+
+  /* Splash overlay */
+  .splash{
+    position:fixed; inset:0; z-index:9999;
+    background: radial-gradient(1200px 900px at 50% -10%, #1a122a 0%, #0d0a13 60%);
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+    transition: opacity .35s ease;
+  }
+  .splash.hide{ opacity:0; pointer-events:none }
+  .flower{
+    width:132px; height:132px; border-radius:50%;
+    background: radial-gradient(60px 60px at 50% 50%, #d4b4ff 0%, #b78cff 80%);
+    box-shadow: 0 0 40px rgba(179,136,255,.5), 0 0 90px rgba(179,136,255,.25);
+    position:relative;
+  }
+  .flower::after{
+    content:''; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:22px; height:22px; border-radius:50%; background:#2b1f3a; 
+    box-shadow: -28px 0 0 #2b1f3a, 28px 0 0 #2b1f3a;
+  }
+  .stem{ width:8px; height:90px; background:#76e39a; margin-top:16px; border-radius:4px }
+</style>
+</head>
+<body>
+<div class="splash" id="splash">
+  <div class="flower"></div>
+  <div class="stem"></div>
+</div>
+
+<div class="wrap">
+  <h1 class="title glow">Flower Garden • Cozy Pixel</h1>
+  <div class="panel"><canvas id="game" width="320" height="200"></canvas></div>
+  <div class="hud">
+    <div class="meter">
+      <h3>Moisture</h3>
+      <div class="bar"><div class="fill moist" id="moistFill"></div></div>
+      <div class="nums"><span id="moistNum">–%</span><span id="waterTank">Can: 0%</span></div>
+    </div>
+    <div class="meter">
+      <h3>Sunlight</h3>
+      <div class="bar"><div class="fill sun" id="sunFill"></div></div>
+      <div class="nums"><span id="sunNum">–%</span><span id="sunStatus">Next sun: 00s</span></div>
+    </div>
+  </div>
+  <div class="controls">
+    <button id="waterBtn">Hold to Water</button>
+    <button id="collectBtn" class="ghost">Collect Sun</button>
+    <button id="resetBtn" class="danger">Reset</button>
+  </div>
+  <div class="note">Water can auto-refills every 30s. A sun token appears every 30s — tap “Collect Sun”. Flower bounces when happy ✨</div>
+</div>
+
+<script>
+(() => {
+  const cvs = document.getElementById('game');
+  const ctx = cvs.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  const moistFill = document.getElementById('moistFill');
+  const sunFill   = document.getElementById('sunFill');
+  const moistNum  = document.getElementById('moistNum');
+  const sunNum    = document.getElementById('sunNum');
+  const tankText  = document.getElementById('waterTank');
+  const sunStatus = document.getElementById('sunStatus');
+
+  const waterBtn  = document.getElementById('waterBtn');
+  const collectBtn= document.getElementById('collectBtn');
+  const resetBtn  = document.getElementById('resetBtn');
+
+  let moisture = 70, sunlight = 50, growth = 0, happy = 0, waterTank = 100;
+  let watering = false;
+
+  const DECAY_MOIST = 0.08, DECAY_SUN = 0.05, WATER_RATE = 0.7;
+  const TICK_MS = 50, REFILL_MS = 30000, SUN_SPAWN_MS = 30000;
+
+  let last = performance.now();
+  let lastRefill = last, lastSun = last, sunToken = false;
+
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  function meter(elFill,elNum,v){ elFill.style.width = v+'%'; elNum.textContent = Math.round(v)+'%'; }
+
+  const startWater = ()=>{ if(waterTank>0) watering = true; };
+  const stopWater  = ()=> watering = false;
+
+  waterBtn.addEventListener('pointerdown', startWater);
+  window.addEventListener('pointerup', stopWater);
+  waterBtn.addEventListener('pointerleave', stopWater);
+
+  collectBtn.addEventListener('click', () => {
+    if (!sunToken) return;
+    sunToken = false;
+    sunlight = clamp(sunlight + 18, 0, 100);
+    happy = 600;
+  });
+
+  resetBtn.addEventListener('click', () => {
+    moisture=70; sunlight=50; waterTank=100; growth=0; happy=0; lastRefill=performance.now(); lastSun=performance.now(); sunToken=false;
+  });
+
+  function draw(){
+    ctx.fillStyle = '#0e0b17'; ctx.fillRect(0,0,cvs.width,cvs.height);
+    ctx.fillStyle = '#1c152e'; ctx.fillRect(0,150,320,50);
+
+    ctx.fillStyle = '#3a2a4f'; ctx.fillRect(120,140,80,10);
+    ctx.fillStyle = '#2e2343'; ctx.fillRect(120,120,80,20);
+    ctx.fillStyle = '#4a3866'; ctx.fillRect(128,120,64,12);
+
+    const bounce = Math.sin(happy/25) * (happy>0 ? 2 : 0);
+    const baseY = 120 + bounce;
+
+    ctx.fillStyle = '#76e39a';
+    for(let i=0;i<30;i++){ ctx.fillRect(158 + (i%2===0?0:1), baseY - i*2, 4, 2); }
+    ctx.fillRect(146, baseY-28, 10, 6);
+    ctx.fillRect(168, baseY-36, 10, 6);
+
+    const stage = Math.min(4, Math.floor((moisture+sunlight)/50));
+    const r = 10 + stage*2;
+    ctx.fillStyle = 'rgba(179,136,255,0.18)';
+    ctx.beginPath(); ctx.arc(160, baseY-70, r+8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = ['#caa8ff','#d6b6ff','#e0c2ff','#ebbfff','#f4c8ff'][stage];
+    ctx.beginPath(); ctx.arc(160, baseY-70, r, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#2b1f3a';
+    ctx.fillRect(154, baseY-74, 3, 3);
+    ctx.fillRect(163, baseY-74, 3, 3);
+    ctx.fillRect(158, baseY-68, 4, 2);
+
+    if (sunToken){
+      const t = performance.now()/600;
+      const y = 40 + Math.sin(t)*3;
+      ctx.fillStyle = '#ffd37a'; ctx.beginPath(); ctx.arc(280, y, 6, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = '#ff8ad6'; ctx.lineWidth = 2; ctx.strokeRect(272, y-8, 16, 16);
+    }
+  }
+
+  function step(now){
+    const dt = now - last;
+    if (dt > 200) { last = now; return requestAnimationFrame(step); }
+
+    moisture = clamp(moisture - DECAY_MOIST*(dt/TICK_MS), 0, 100);
+    sunlight = clamp(sunlight - DECAY_SUN  *(dt/TICK_MS), 0, 100);
+
+    if (watering && waterTank>0){
+      moisture = clamp(moisture + WATER_RATE*(dt/TICK_MS), 0, 100);
+      waterTank = clamp(waterTank - 0.9*(dt/TICK_MS), 0, 100);
+      happy = 200;
+    }
+
+    const untilRefill = Math.max(0, REFILL_MS - (now - lastRefill));
+    if (untilRefill <= 0){ waterTank = 100; lastRefill = now; }
+    const untilSun = Math.max(0, SUN_SPAWN_MS - (now - lastSun));
+    if (untilSun <= 0 && !sunToken){ sunToken = true; lastSun = now; }
+
+    if (happy>0) happy -= dt/1.2;
+
+    document.getElementById('waterTank').textContent = 'Can: ' + Math.round(waterTank) + '%';
+    document.getElementById('sunStatus').textContent = sunToken ? 'Sun ready!' : 'Next sun: ' + String(Math.ceil(untilSun/1000)).padStart(2,'0') + 's';
+
+    meter(moistFill, moistNum, moisture);
+    meter(sunFill, sunNum, sunlight);
+
+    draw();
+    last = now;
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+
+  // Hide splash once ready or after a short delay (just for vibes)
+  const splash = document.getElementById('splash');
+  window.addEventListener('load', () => {
+    setTimeout(()=> splash.classList.add('hide'), 700);
+  });
+
+  // PWA: register service worker (offline)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js'));
+  }
+
+  // Desktop accessibility
+  window.addEventListener('keydown', e => { if (e.code==='Space') { if (waterTank>0) watering = true; } });
+  window.addEventListener('keyup',   e => { if (e.code==='Space') watering = false; });
+})();
+</script>
+</body>
+</html>
